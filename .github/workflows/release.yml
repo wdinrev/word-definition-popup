@@ -24,7 +24,7 @@ jobs:
       - name: Extract version from userscript
         id: version
         run: |
-          VERSION=$(grep -oP '(?<=@version\s+)\S+' word-definition-popup.user.js)
+          VERSION=$(grep '@version' word-definition-popup.user.js | sed 's/.*@version[[:space:]]*//')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
