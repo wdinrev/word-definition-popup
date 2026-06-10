@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'word-definition-popup.user.js'
+      - "word-definition-popup/word-definition-popup.user.js"
 
 jobs:
   validate:
@@ -21,7 +21,7 @@ jobs:
       - name: Extract PR version
         id: pr_version
         run: |
-          VERSION=$(grep -oP '(?<=@version\s{6})\S+' word-definition-popup.user.js)
+          VERSION=$(grep -oP '(?<=@version\s+)\S+' word-definition-popup/word-definition-popup.user.js)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -29,7 +29,7 @@ jobs:
         id: base_version
         run: |
           git fetch origin ${{ github.base_ref }}
-          BASE_VERSION=$(git show origin/${{ github.base_ref }}:word-definition-popup.user.js | grep -oP '(?<=@version\s{6})\S+')
+          BASE_VERSION=$(git show origin/${{ github.base_ref }}:word-definition-popup/word-definition-popup.user.js | grep -oP '(?<=@version\s+)\S+')
           echo "version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Ensure version was bumped
@@ -37,9 +37,8 @@ jobs:
           PR="${{ steps.pr_version.outputs.version }}"
           BASE="${{ steps.base_version.outputs.version }}"
 
-          if [ "$PR" = "$BASE" ]; then
-            echo "❌ Version was not bumped. Current: $BASE, PR: $PR"
-            echo "   Please update @version in word-definition-popup.user.js"
+          if [ -z "$PR" ]; then
+            echo "❌ Could not extract version from PR branch."
             exit 1
           fi
 
@@ -49,11 +48,50 @@ jobs:
             exit 1
           fi
 
+          if [ "$PR" = "$BASE" ]; then
+            echo "❌ Version was not bumped. Current: $BASE, PR: $PR"
+            echo "   Please update @version in word-definition-popup.user.js"
+            exit 1
+          fi
+
+          # Compare versions: PR must be strictly greater than BASE
+          IFS='.' read -r PR_MAJOR PR_MINOR PR_PATCH <<< "$PR"
+          IFS='.' read -r BASE_MAJOR BASE_MINOR BASE_PATCH <<< "$BASE"
+
+          is_greater() {
+            [ "$1" -gt "$2" ] && return 0
+            [ "$1" -lt "$2" ] && return 1
+            return 2  # equal
+          }
+
+          version_ok=false
+          is_greater "$PR_MAJOR" "$BASE_MAJOR"
+          case $? in
+            0) version_ok=true ;;
+            1) version_ok=false ;;
+            2)
+              is_greater "$PR_MINOR" "$BASE_MINOR"
+              case $? in
+                0) version_ok=true ;;
+                1) version_ok=false ;;
+                2)
+                  is_greater "$PR_PATCH" "$BASE_PATCH"
+                  [ $? -eq 0 ] && version_ok=true || version_ok=false
+                  ;;
+              esac
+              ;;
+          esac
+
+          if [ "$version_ok" = "false" ]; then
+            echo "❌ PR version ($PR) must be greater than base version ($BASE)"
+            exit 1
+          fi
+
           echo "✅ Version bumped: $BASE → $PR"
 
       - name: Check release notes file exists
         run: |
-          FILE="release-notes/${{ steps.pr_version.outputs.tag }}.md"
+          FILE="word-definition-popup/release-notes/${{ steps.pr_version.outputs.tag }}.md"
           if [ ! -f "$FILE" ]; then
             echo "⚠️  No release notes found at $FILE"
             echo "   Create it to include curated notes in the GitHub Release."
