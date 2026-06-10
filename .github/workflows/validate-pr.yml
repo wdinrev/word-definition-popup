@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - "word-definition-popup/word-definition-popup.user.js"
+      - "word-definition-popup.user.js"
 
 jobs:
   validate:
@@ -21,7 +21,7 @@ jobs:
       - name: Extract PR version
         id: pr_version
         run: |
-          VERSION=$(grep -oP '(?<=@version\s+)\S+' word-definition-popup/word-definition-popup.user.js)
+          VERSION=$(grep -oP '(?<=@version\s+)\S+' word-definition-popup.user.js)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -29,7 +29,7 @@ jobs:
         id: base_version
         run: |
           git fetch origin ${{ github.base_ref }}
-          BASE_VERSION=$(git show origin/${{ github.base_ref }}:word-definition-popup/word-definition-popup.user.js | grep -oP '(?<=@version\s+)\S+')
+          BASE_VERSION=$(git show origin/${{ github.base_ref }}:word-definition-popup.user.js | grep -oP '(?<=@version\s+)\S+')
           echo "version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Ensure version was bumped
@@ -91,7 +91,7 @@ jobs:
 
       - name: Check release notes file exists
         run: |
-          FILE="word-definition-popup/release-notes/${{ steps.pr_version.outputs.tag }}.md"
+          FILE="release-notes/${{ steps.pr_version.outputs.tag }}.md"
           if [ ! -f "$FILE" ]; then
             echo "⚠️  No release notes found at $FILE"
             echo "   Create it to include curated notes in the GitHub Release."
