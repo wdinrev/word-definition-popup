@@ -6,6 +6,7 @@
 // @downloadURL  https://raw.githubusercontent.com/doniwicaksono/word-definition-popup/main/word-definition-popup.user.js
 // @description  Instant word definitions on text selection, with adaptive theming and WCAG AA contrast
 // @author       doniwicaksono
+// @homepage     https://github.com/doniwicaksono/word-definition-popup
 // @match        *://*/*
 // @icon         https://img.icons8.com/?size=100&id=lAy38mU19x00&format=png&color=000000
 // @grant        GM_xmlhttpRequest
