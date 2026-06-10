@@ -2,7 +2,7 @@
 
 A lightweight userscript that automatically displays word definitions when you select text on any webpage. Features adaptive theming that intelligently matches your website's color scheme with guaranteed readability.
 
-![Version](https://img.shields.io/badge/version-1.2.1-blue)
+![Version](https://img.shields.io/badge/version-1.3.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## ✨ Features
@@ -16,6 +16,7 @@ A lightweight userscript that automatically displays word definitions when you s
 - **🔇 No Close Button** - Minimal UI that auto-hides when needed
 - **🌐 Works Everywhere** - Compatible with all websites including complex layouts
 - **🆓 Free API** - Uses Free Dictionary API (no API key required)
+- **🔄 Auto-Update** - Tampermonkey/Violentmonkey will update the script automatically
 
 ## 🚀 Installation
 
@@ -131,8 +132,10 @@ Uses the [Free Dictionary API](https://dictionaryapi.dev/) for word definitions:
 
 ### Performance Optimizations
 - **Debouncing**: 300ms delay prevents excessive API calls
-- **Caching**: Same word won't trigger new API call
-- **Minimal DOM**: Single popup element reused
+- **Word caching**: Same word won't trigger a new API call
+- **Minimal DOM**: Single popup element reused across all lookups
+- **Efficient color parsing**: Fast-path regex for `rgb()`, `rgba()`, and `#rrggbb` — browser computation only used as a last resort
+- **Single parser element**: One hidden element reused for color resolution, avoiding repeated DOM insertions
 - **Event delegation**: Efficient event handling
 - **Lazy loading**: Font loaded asynchronously
 - **Smart traversal**: Stops at first solid background
@@ -145,13 +148,11 @@ Uses the [Free Dictionary API](https://dictionaryapi.dev/) for word definitions:
 - Verify userscript manager is enabled
 
 ### Wrong colors or poor contrast?
-- **v1.2.1 fixed this!** The script now ensures WCAG AA compliance
-- If issues persist, check browser console for debug logs
+- The script ensures WCAG AA compliance automatically
 - Report specific websites as GitHub issues with screenshots
 
 ### Popup has white background on dark sites?
-- **Fixed in v1.2.1** with enhanced background detection
-- The script now traverses deeper and handles opacity correctly
+- The script traverses up to 20 DOM levels and handles opacity correctly
 - Works on Bluesky, Twitter/X, Reddit, and other complex dark themes
 
 ### Definition not found?
@@ -164,21 +165,21 @@ Uses the [Free Dictionary API](https://dictionaryapi.dev/) for word definitions:
 - Check browser zoom level (100% recommended)
 - Report edge cases as GitHub issues
 
-### Debug Mode
-To see detailed theme detection logs:
-1. Open browser console (F12)
-2. Select a word
-3. Look for "Theme applied:" logs showing detected colors
-
 ## 📝 Changelog
 
-### v1.2.1 (2025-01-06)
+### v1.3.0 (2026-06-10)
+- 🔄 Added `@updateURL` / `@downloadURL` for automatic script updates via Tampermonkey/Violentmonkey
+- ⚡ Eliminated DOM thrashing in color parsing — single cached element + fast regex paths
+- ✨ Fixed popup fade-in/out animation (`visibility` + `opacity` transition instead of `display` toggle)
+- 📐 Fixed popup positioning accuracy on first show
+- 🔧 Fixed GitHub Actions workflows (path filters, version regex, semver comparison)
+
+### v1.2.1 (2025-10-11)
 - 🔧 **Fixed contrast issues** on complex dark themes (Bluesky, Twitter/X)
 - 🎨 Enhanced background detection with deeper DOM traversal (20 levels)
 - ✅ Added **WCAG AA compliance** with automatic contrast checking (4.5:1)
 - 🔍 Improved handling of **semi-transparent overlays**
 - 🌓 Better fallback to `prefers-color-scheme` system preference
-- 📊 Added debug logging for troubleshooting
 - 🐛 Fixed rgba color parsing with alpha channel support
 
 ### v1.2.0 (2025-01-06)
@@ -203,9 +204,14 @@ Contributions are welcome! Here's how:
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Bump `@version` in `word-definition-popup.user.js` (semver, must be greater than current)
+4. Add a `release-notes/vX.Y.Z.md` file (optional but recommended)
+5. Commit your changes and open a Pull Request
+
+### Automated Release Process
+This repo uses GitHub Actions to automate releases:
+- **On PR**: validates that `@version` was bumped to a higher semver value and the tag doesn't already exist
+- **On merge to main**: automatically creates a git tag, generates a release, and attaches the `.user.js` file
 
 ### Development Setup
 ```bash
@@ -214,16 +220,12 @@ git clone https://github.com/doniwicaksono/word-definition-popup.git
 
 # Edit the .user.js file
 # Test in your browser with userscript manager
-
-# Enable debug logs in browser console
-# Look for "Theme applied:" messages
 ```
 
 ### Reporting Issues
 When reporting color/contrast issues, please include:
 - Website URL
 - Screenshot of the issue
-- Browser console logs
 - Browser and OS version
 
 ## 📄 License
