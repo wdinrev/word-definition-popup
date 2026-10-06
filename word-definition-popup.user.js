@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Smart Word Definition Popup
 // @namespace    https://github.com/wdinrev/word-definition-popup
-// @version      1.4.0
+// @version      1.4.1
 // @description  Instant word definitions on text selection, with adaptive theming and WCAG AA contrast
 // @author       wdinrev
 // @homepage     https://github.com/wdinrev/word-definition-popup
@@ -13,6 +13,7 @@
 // @icon         https://img.icons8.com/?size=100&id=lAy38mU19x00&format=png&color=000000
 // @grant        GM_xmlhttpRequest
 // @grant        GM.xmlHttpRequest
+// @connect      *
 // @connect      en.wiktionary.org
 // @connect      api.datamuse.com
 // @connect      api.dictionaryapi.dev
@@ -23,7 +24,7 @@
 (function () {
   "use strict";
 
-  // Inject styles (uses system monospace font stack for instant loading & strict CSP compatibility)
+  // Inject styles (system monospace font stack for fast loading and strict CSP compatibility)
   const style = document.createElement("style");
   style.textContent = `
     #word-definition-popup {
@@ -126,18 +127,48 @@
       .trim();
   }
 
-  // Unified HTTP request helper with strict timeout
-  function httpRequest(url, timeoutMs = 3500) {
-    return new Promise((resolve, reject) => {
-      // 1. GM_xmlhttpRequest
-      if (typeof GM_xmlhttpRequest === "function") {
-        try {
+  // Resilient HTTP request helper
+  // Tries native fetch first (avoids Tampermonkey permission prompt hangs on CORS-enabled APIs).
+  // Falls back to GM_xmlhttpRequest if fetch fails (e.g. strict CSP).
+  async function httpRequest(url, timeoutMs = 2500) {
+    // 1. Try native fetch first
+    if (typeof fetch === "function") {
+      try {
+        const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+        const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+        const res = await fetch(url, {
+          headers: { Accept: "application/json" },
+          signal: controller ? controller.signal : undefined,
+        });
+        clearTimeout(timer);
+        const text = await res.text();
+        return { ok: res.ok, status: res.status, text: text };
+      } catch (err) {
+        // fetch failed (strict CSP or offline); try GM transport next
+      }
+    }
+
+    // 2. Try GM_xmlhttpRequest with local timeout guard
+    if (typeof GM_xmlhttpRequest === "function") {
+      try {
+        return await new Promise((resolve, reject) => {
+          let settled = false;
+          const timer = setTimeout(() => {
+            if (!settled) {
+              settled = true;
+              reject(new Error("Request timed out"));
+            }
+          }, timeoutMs);
+
           GM_xmlhttpRequest({
             method: "GET",
             url: url,
             timeout: timeoutMs,
             headers: { Accept: "application/json" },
             onload: function (res) {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
               resolve({
                 ok: res.status >= 200 && res.status < 300,
                 status: res.status,
@@ -145,27 +176,45 @@
               });
             },
             ontimeout: function () {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
               reject(new Error("Request timed out"));
             },
             onerror: function (err) {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
               reject(err || new Error("Network error"));
             },
           });
-          return;
-        } catch (e) {
-          // Fall through to other transports
-        }
+        });
+      } catch (e) {
+        // Fall through
       }
+    }
 
-      // 2. GM.xmlHttpRequest
-      if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
-        try {
+    // 3. Try GM.xmlHttpRequest with local timeout guard
+    if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
+      try {
+        return await new Promise((resolve, reject) => {
+          let settled = false;
+          const timer = setTimeout(() => {
+            if (!settled) {
+              settled = true;
+              reject(new Error("Request timed out"));
+            }
+          }, timeoutMs);
+
           GM.xmlHttpRequest({
             method: "GET",
             url: url,
             timeout: timeoutMs,
             headers: { Accept: "application/json" },
             onload: function (res) {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
               resolve({
                 ok: res.status >= 200 && res.status < 300,
                 status: res.status,
@@ -173,40 +222,25 @@
               });
             },
             ontimeout: function () {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
               reject(new Error("Request timed out"));
             },
             onerror: function (err) {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
               reject(err || new Error("Network error"));
             },
           });
-          return;
-        } catch (e) {
-          // Fall through
-        }
+        });
+      } catch (e) {
+        // Fall through
       }
+    }
 
-      // 3. Native fetch with AbortSignal timeout
-      if (typeof fetch === "function") {
-        const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-        const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
-        fetch(url, {
-          headers: { Accept: "application/json" },
-          signal: controller ? controller.signal : undefined,
-        })
-          .then(async (res) => {
-            clearTimeout(timer);
-            const text = await res.text();
-            resolve({ ok: res.ok, status: res.status, text: text });
-          })
-          .catch((err) => {
-            clearTimeout(timer);
-            reject(err);
-          });
-        return;
-      }
-
-      reject(new Error("No HTTP request mechanism available"));
-    });
+    throw new Error("No HTTP request mechanism available");
   }
 
   // Parse Wiktionary REST API response
@@ -258,9 +292,9 @@
     try {
       const res = await httpRequest(
         `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(word)}`,
-        3500,
+        2500,
       );
-      if (res.ok && res.text) {
+      if (res && res.ok && res.text) {
         const parsed = parseWiktionary(JSON.parse(res.text), word);
         if (parsed) return parsed;
       }
@@ -268,18 +302,18 @@
       // Fall through to Tier 2
     }
 
-    // Tier 2: Datamuse API (WordNet-based, ~200ms)
+    // Tier 2: Datamuse API (WordNet-based, ~150ms)
     try {
       const res = await httpRequest(
         `https://api.datamuse.com/words?sp=${encodeURIComponent(word)}&md=dp&max=1`,
-        2500,
+        2000,
       );
-      if (res.ok && res.text) {
+      if (res && res.ok && res.text) {
         const parsed = parseDatamuse(JSON.parse(res.text), word);
         if (parsed) return parsed;
       }
     } catch (e) {
-      // Exhausted
+      // All tiers exhausted
     }
 
     return null;
@@ -476,7 +510,7 @@
 
   // Popup display
   function showLoading(word, x, y, targetElement) {
-    popup.innerHTML = `<div class="word-title">${escapeHtml(word)}</div><div class="loading">Loading definition...</div>`;
+    popup.innerHTML = `<div class="word-title">${escapeHtml(word)}</div><div class="loading">Loading...</div>`;
     popup.classList.add("show");
     applyTheme(targetElement);
     positionPopup(x, y);
@@ -519,7 +553,7 @@
     return text.replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, "").trim();
   }
 
-  // Main lookup coordinator
+  // Main lookup coordinator with 3.5s total failsafe
   async function lookupWord(word, x, y, targetElement) {
     if (definitionCache.has(word)) {
       showDefinition(definitionCache.get(word), x, y, targetElement);
@@ -529,8 +563,16 @@
     const reqId = ++activeRequestId;
     showLoading(word, x, y, targetElement);
 
+    // Hard failsafe: if anything stalls or takes > 3500ms, transition out of loading
+    const failsafeTimer = setTimeout(() => {
+      if (reqId === activeRequestId && popup.classList.contains("show")) {
+        showError("No definition found", x, y, targetElement);
+      }
+    }, 3500);
+
     try {
       const result = await fetchWordDefinition(word);
+      clearTimeout(failsafeTimer);
       if (reqId !== activeRequestId) return;
 
       if (result && result.meanings && result.meanings.length > 0) {
@@ -540,8 +582,9 @@
         showError("No definition found", x, y, targetElement);
       }
     } catch (e) {
+      clearTimeout(failsafeTimer);
       if (reqId !== activeRequestId) return;
-      showError("Could not load definition", x, y, targetElement);
+      showError("No definition found", x, y, targetElement);
     }
   }
 
