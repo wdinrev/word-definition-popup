@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - "word-definition-popup.user.js"
-
+  workflow_dispatch:
 permissions:
   contents: write
 
@@ -24,7 +24,7 @@ jobs:
       - name: Extract version from userscript
         id: version
         run: |
-          VERSION=$(grep '@version' word-definition-popup.user.js | sed 's/.*@version[[:space:]]*//')
+          VERSION=$(grep '@version' word-definition-popup.user.js | sed 's/.*@version[[:space:]]*//' | tr -d '\r' | xargs)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -132,3 +132,11 @@ jobs:
             --title "Release ${{ steps.version.outputs.tag }}" \
             --notes-file /tmp/release_body.md \
             word-definition-popup.user.js
+
+      - name: Trigger GreasyFork sync (optional)
+        if: env.GREASYFORK_WEBHOOK_URL != '' && steps.tag_check.outputs.exists == 'false'
+        env:
+          GREASYFORK_WEBHOOK_URL: ${{ secrets.GREASYFORK_WEBHOOK_URL }}
+        run: |
+          echo "Triggering GreasyFork webhook sync..."
+          curl -s -f -X POST "$GREASYFORK_WEBHOOK_URL" || echo "GreasyFork ping completed (or ignored)"

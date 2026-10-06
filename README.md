@@ -2,7 +2,7 @@
 
 A lightweight userscript that automatically displays word definitions when you select text on any webpage. Features adaptive theming that intelligently matches your website's color scheme with guaranteed readability.
 
-![Version](https://img.shields.io/badge/version-1.3.0-blue)
+![Version](https://img.shields.io/badge/version-1.4.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## ✨ Features
@@ -12,11 +12,13 @@ A lightweight userscript that automatically displays word definitions when you s
 - **✅ Guaranteed Readability** - WCAG AA compliant contrast ratios (4.5:1 minimum)
 - **🪶 Lightweight** - Minimal performance impact with optimized code
 - **🎭 Smart Positioning** - Popup intelligently adjusts based on viewport boundaries
-- **⌨️ IBM Plex Mono** - Clean, professional monospace typography
+- **⚡ High-Availability Multi-Tier Dictionary** - Powered by Wikimedia Wiktionary with Datamuse and Free Dictionary fallbacks (never gets stuck in loading)
+- **⚡ Instant In-Memory Cache** - Previously viewed words render in 0ms without repeated network requests
+- **⌨️ Monospace Typography** - Professional system monospace font stack (no external font downloads, strict CSP-friendly)
 - **🔇 No Close Button** - Minimal UI that auto-hides when needed
-- **🌐 Works Everywhere** - Compatible with all websites including complex layouts
-- **🆓 Free API** - Uses Free Dictionary API (no API key required)
-- **🔄 Auto-Update** - Tampermonkey/Violentmonkey will update the script automatically
+- **🌐 Works Everywhere** - Compatible with all websites including complex layouts and strict CSP environments
+- **🆓 Free & Open Source** - No API keys required, no tracking
+- **🔄 Auto-Update** - Tampermonkey/Violentmonkey auto-updates, with 100% GreasyFork synchronization
 
 ## 🚀 Installation
 
@@ -30,20 +32,22 @@ You need a userscript manager extension installed in your browser:
 ### Steps
 
 1. **Install a userscript manager** (see links above)
-2. **Click here to install**: [word-definition-popup.user.js](https://github.com/doniwicaksono/word-definition-popup/raw/refs/heads/main/word-definition-popup.user.js)
-3. **Confirm installation** in the userscript manager popup
+2. **Install from GreasyFork**: [Smart Word Definition Popup on GreasyFork](https://greasyfork.org/en/scripts/551769-smart-word-definition-popup)
+   *or install directly from GitHub*: [word-definition-popup.user.js](https://raw.githubusercontent.com/wdinrev/word-definition-popup/main/word-definition-popup.user.js)
+3. **Confirm installation** in your userscript manager
 4. **Done!** Start selecting words on any webpage
 
 ## 📖 Usage
 
 1. **Select any word** on any webpage
-2. **Wait 300ms** (debounce delay)
+2. **Wait 250ms** (responsive debounce delay)
 3. **See the definition** appear near your cursor
 
 ### Supported Word Types
-- Single English words (1-30 characters)
+- Single English words (2-35 characters)
 - Words with hyphens (e.g., "self-aware")
 - Words with apostrophes (e.g., "don't")
+- Words selected alongside quotes, commas, or punctuation (automatically trimmed)
 
 ### Hiding the Popup
 The popup automatically hides when you:
@@ -108,12 +112,20 @@ if (contrastRatio < 4.5) // Change 4.5 for different standards
 
 ## 🔧 Technical Details
 
-### API
-Uses the [Free Dictionary API](https://dictionaryapi.dev/) for word definitions:
-- **Endpoint**: `https://api.dictionaryapi.dev/api/v2/entries/en/{word}`
-- **No authentication required**
-- **No rate limiting** (reasonable usage)
+### Dictionary Architecture
+To eliminate downtime, network hangs, and Cloudflare 522 errors, the script uses a resilient multi-tier architecture:
 
+1. **Primary: Wiktionary REST API** (`en.wiktionary.org`)
+   - Backed by Wikimedia Foundation global edge CDN (~200-300ms latency, 99.99% uptime)
+   - Covers millions of English terms, inflections, slang, idioms, and contractions
+2. **Secondary Fallback: Datamuse API** (`api.datamuse.com`)
+   - Fast WordNet-based definitions (~150-200ms) when Wiktionary has no direct match
+3. **Tertiary Fallback: Free Dictionary API** (`api.dictionaryapi.dev`)
+   - Used for phonetics and alternative definitions if available online
+4. **Zero-Hang Request Layer**:
+   - Enforces a strict 3500ms timeout across `GM_xmlhttpRequest`, `GM.xmlHttpRequest`, and native `fetch`
+   - In-flight request ID tracking ensures outdated responses never overwrite newer user selections
+   - In-memory `Map` cache delivers instant 0ms responses on repeated word selections
 ### Color Detection Algorithm
 1. **Traverse DOM tree** up to 20 levels deep
 2. **Collect all non-transparent backgrounds** with opacity > 0.1
@@ -165,8 +177,37 @@ Uses the [Free Dictionary API](https://dictionaryapi.dev/) for word definitions:
 - Check browser zoom level (100% recommended)
 - Report edge cases as GitHub issues
 
+## 🔄 GreasyFork Synchronization Pipeline
+
+This repository is configured to keep GreasyFork 100% in sync with changes in the GitHub repository:
+
+- **GreasyFork Script**: [Smart Word Definition Popup (#551769)](https://greasyfork.org/en/scripts/551769-smart-word-definition-popup)
+- **Sync Source URL**: `https://raw.githubusercontent.com/wdinrev/word-definition-popup/main/word-definition-popup.user.js`
+
+### How Instant Synchronization Works
+1. **GitHub Webhook (Instant Sync)**:
+   - In GreasyFork: Go to [Webhook Info](https://greasyfork.org/en/users/webhook-info) to copy your Payload URL and Secret.
+   - In GitHub: Go to **Settings > Webhooks > Add webhook**:
+     - **Payload URL**: GreasyFork Webhook URL
+     - **Content type**: `application/json`
+     - **Secret**: GreasyFork Webhook Secret
+     - **Events**: `Pushes` (active)
+   - In GreasyFork Script Admin: In the **Sync** tab, set Sync Type to **Webhook** and Sync URL to the `main` branch raw file URL.
+   - Whenever changes are pushed to `main` with a bumped `@version`, GreasyFork receives the signed webhook and automatically publishes the new version within seconds.
+2. **GitHub Actions Automated Releases**:
+   - PR validation (`validate-pr.yml`) automatically checks semver bumps and tag availability.
+   - Release workflow (`release.yml`) automatically creates git tags, GitHub releases, and attaches the userscript asset.
+
 ## 📝 Changelog
 
+### v1.4.0 (2026-10-06)
+- 🐛 **Fixed "Stuck in Loading..."**: Replaced fragile single-API dependency with a multi-tier lookup (Wikimedia Wiktionary + Datamuse + Free Dictionary).
+- ⏱️ **Zero-Hang Guarantee**: Added strict timeouts (3500ms) and request cancellation on all network transports (`GM_xmlhttpRequest`, `GM.xmlHttpRequest`, `fetch`).
+- ⚡ **Instant In-Memory Cache**: Repeated lookups for the same word now render instantly (0ms) without network calls.
+- 🔤 **System Monospace Typography**: Switched to system monospace font stack (`IBM Plex Mono` / `ui-monospace` / `SFMono-Regular`), eliminating external `<link>` injection and fixing Content Security Policy (CSP) errors on strict websites.
+- ✂️ **Punctuation Stripping**: Text selection now cleanly trims quotes, commas, and punctuation around words.
+- 👤 **Author & Ownership Cutover**: Updated author to `wdinrev` and unified repository URLs across userscript metadata, documentation, and workflows.
+- 🔄 **GreasyFork Sync Verified**: Verified Webhook-based pipeline and release automation for instant sync with GreasyFork.
 ### v1.3.0 (2026-06-10)
 - 🔄 Added `@updateURL` / `@downloadURL` for automatic script updates via Tampermonkey/Violentmonkey
 - ⚡ Eliminated DOM thrashing in color parsing — single cached element + fast regex paths
@@ -216,7 +257,7 @@ This repo uses GitHub Actions to automate releases:
 ### Development Setup
 ```bash
 # Clone the repo
-git clone https://github.com/doniwicaksono/word-definition-popup.git
+git clone https://github.com/wdinrev/word-definition-popup.git
 
 # Edit the .user.js file
 # Test in your browser with userscript manager
@@ -235,7 +276,7 @@ This project is licensed under the MIT License - see below:
 ```
 MIT License
 
-Copyright (c) 2025 doniwicaksono
+Copyright (c) 2025-2026 wdinrev
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

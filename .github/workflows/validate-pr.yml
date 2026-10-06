@@ -21,7 +21,7 @@ jobs:
       - name: Extract PR version
         id: pr_version
         run: |
-          VERSION=$(grep '@version' word-definition-popup.user.js | sed 's/.*@version[[:space:]]*//')
+          VERSION=$(grep '@version' word-definition-popup.user.js | sed 's/.*@version[[:space:]]*//' | tr -d '\r' | xargs)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -29,7 +29,7 @@ jobs:
         id: base_version
         run: |
           git fetch origin ${{ github.base_ref }}
-          BASE_VERSION=$(git show origin/${{ github.base_ref }}:word-definition-popup.user.js | grep '@version' | sed 's/.*@version[[:space:]]*//')
+          BASE_VERSION=$(git show origin/${{ github.base_ref }}:word-definition-popup.user.js | grep '@version' | sed 's/.*@version[[:space:]]*//' | tr -d '\r' | xargs)
           echo "version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Ensure version was bumped
